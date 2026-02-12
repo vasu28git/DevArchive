@@ -11,4 +11,9 @@ import com.example.devarchive.entity.User;
 @Repository
 public interface BugEntryRepository extends JpaRepository<BugEntry, Long> {
     List<BugEntry> findByUser(User user);
+    List<BugEntry> findByTopicIgnoreCase(String topic);
+
+    List<BugEntry> findByProgrammingLanguageIgnoreCase(String programmingLanguage);
+
+    List<BugEntry> findByTagsContainingIgnoreCase(String tag);
 }

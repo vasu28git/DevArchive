@@ -53,4 +53,20 @@ public class BugEntryController {
         bugEntryService.deleteBugEntry(id);
         return ResponseEntity.ok("Bug entry deleted successfully");
     }
+
+        @GetMapping("/search/topic/{topic}")
+    public ResponseEntity<List<BugEntryResponse>> searchByTopic(@PathVariable String topic) {
+        return ResponseEntity.ok(bugEntryService.searchByTopic(topic));
+    }
+
+    @GetMapping("/search/language/{language}")
+    public ResponseEntity<List<BugEntryResponse>> searchByLanguage(@PathVariable String language) {
+        return ResponseEntity.ok(bugEntryService.searchByLanguage(language));
+    }
+
+    @GetMapping("/search/tag/{tag}")
+    public ResponseEntity<List<BugEntryResponse>> searchByTag(@PathVariable String tag) {
+        return ResponseEntity.ok(bugEntryService.searchByTag(tag));
+}
+
 }

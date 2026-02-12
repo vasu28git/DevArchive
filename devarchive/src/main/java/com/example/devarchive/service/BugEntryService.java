@@ -1,13 +1,17 @@
 package com.example.devarchive.service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.devarchive.dto.BugEntryRequest;
 import com.example.devarchive.dto.BugEntryResponse;
 import com.example.devarchive.entity.BugEntry;
+import com.example.devarchive.entity.Tag;
 import com.example.devarchive.entity.User;
 import com.example.devarchive.repository.BugEntryRepository;
 import com.example.devarchive.repository.UserRepository;
@@ -18,12 +22,15 @@ public class BugEntryService {
 
     private final BugEntryRepository bugEntryRepository;
     private final UserRepository userRepository;
+    private final TagService tagService;
 
-    public BugEntryService(BugEntryRepository bugEntryRepository, UserRepository userRepository) {
+    public BugEntryService(BugEntryRepository bugEntryRepository, UserRepository userRepository, TagService tagService) {
         this.bugEntryRepository = bugEntryRepository;
         this.userRepository = userRepository;
+        this.tagService = tagService;
     }
 
+    @Transactional
     public BugEntryResponse createBugEntry(BugEntryRequest request) {
         String email = SecurityUtil.getCurrentUserEmail();
         User user = userRepository.findByEmail(email)
@@ -37,6 +44,9 @@ public class BugEntryService {
         bugEntry.setTags(request.getTags());
         bugEntry.setTopic(request.getTopic());
         bugEntry.setUser(user);
+
+        // Sync tags: use tagNames if provided, otherwise parse from legacy tags string
+        syncTags(bugEntry, request);
 
         BugEntry saved = bugEntryRepository.save(bugEntry);
         return toResponse(saved);
@@ -65,6 +75,7 @@ public class BugEntryService {
         return toResponse(bugEntry);
     }
 
+    @Transactional
     public BugEntryResponse updateBugEntry(Long bugId, BugEntryRequest request) {
         BugEntry bugEntry = bugEntryRepository.findById(bugId)
                 .orElseThrow(() -> new RuntimeException("Bug entry not found"));
@@ -82,6 +93,9 @@ public class BugEntryService {
         }
         bugEntry.setTags(request.getTags());
         bugEntry.setTopic(request.getTopic());
+
+        // Sync tags: use tagNames if provided, otherwise parse from legacy tags string
+        syncTags(bugEntry, request);
 
         BugEntry updated = bugEntryRepository.save(bugEntry);
         return toResponse(updated);
@@ -107,8 +121,57 @@ public class BugEntryService {
         response.setProgrammingLanguage(bugEntry.getProgrammingLanguage());
         response.setErrorStackTrace(bugEntry.getErrorStackTrace());
         response.setTags(bugEntry.getTags());
+        response.setTagNames(tagService.tagsToList(bugEntry.getTagSet()));
         response.setTopic(bugEntry.getTopic());
         response.setUserEmail(bugEntry.getUser().getEmail());
         return response;
+    }
+
+   
+    private void syncTags(BugEntry bugEntry, BugEntryRequest request) {
+        Set<Tag> tagSet;
+
+        if (request.getTagNames() != null && !request.getTagNames().isEmpty()) {
+            
+            tagSet = tagService.findOrCreateTags(request.getTagNames());
+            bugEntry.setTags(tagService.tagsToString(tagSet));
+        } else if (request.getTags() != null && !request.getTags().trim().isEmpty()) {
+            tagSet = tagService.parseAndFindOrCreateTags(request.getTags());
+        } else {
+            tagSet = Set.of();
+        }
+
+        bugEntry.getTagSet().clear();
+        bugEntry.getTagSet().addAll(tagSet);
+    }
+
+    public List<BugEntryResponse> searchByTopic(String topic) {
+        List<BugEntry> list = bugEntryRepository.findByTopicIgnoreCase(topic);
+        List<BugEntryResponse> result = new ArrayList<>();
+
+        for (BugEntry bug : list) {
+            result.add(toResponse(bug));
+        }
+        return result;
+    }
+
+    public List<BugEntryResponse> searchByLanguage(String language) {
+        List<BugEntry> list = bugEntryRepository.findByProgrammingLanguageIgnoreCase(language);
+        List<BugEntryResponse> result = new ArrayList<>();
+
+        for (BugEntry bug : list) {
+            result.add(toResponse(bug));
+        }
+        return result;
+    }
+
+    public List<BugEntryResponse> searchByTag(String tag) {
+        List<BugEntry> list = bugEntryRepository.findByTagsContainingIgnoreCase(tag);
+        List<BugEntryResponse> result = new ArrayList<>();
+
+        for (BugEntry bug : list) {
+            result.add(toResponse(bug));
+        }
+        return result;
     }
 }
